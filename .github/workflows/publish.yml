@@ -1,12 +1,18 @@
 name: Publish to pypi
 
-on: push
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
+    branches: [main]
 
 jobs:
   publish-pypi:
     permissions:
       id-token: write
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
       - uses: actions/checkout@v4
       - name: Install uv
