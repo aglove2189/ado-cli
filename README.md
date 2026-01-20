@@ -104,6 +104,15 @@ ado pr close 123
 
 # Show build checks for pull request
 ado pr checks 123
+
+# Add comment to pull request
+ado pr comment 123
+
+# Add comment with inline message
+ado pr comment 123 -m "LGTM! Ready to merge"
+
+# Add comment to PR in specific project/repo
+ado pr comment 123 -m "Please fix the typo" --project MyProject --repo MyRepo
 ```
 
 ### Work Items

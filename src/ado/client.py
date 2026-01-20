@@ -11,7 +11,7 @@ class AdoClient:
     def __init__(self, server_url: str, pat: str, collection: str):
         self.server_url = server_url.rstrip("/")
         self.collection = collection
-        self.base_url = f"{self.server_url}/{collection}"
+        self.base_url = f"{self.server_url}/{quote(collection)}"
         self.headers = {
             "Content-Type": "application/json",
             "Authorization": f"Basic {self._encode_pat(pat)}",
@@ -99,13 +99,32 @@ class AdoClient:
             response.raise_for_status()
             return response.json()
 
+    def get_definitions(self, project: str) -> Dict[str, Any]:
+        """Get build definitions (pipelines)"""
+        url = (
+            f"{self.base_url}/{quote(project)}/_apis/build/definitions?api-version=6.0"
+        )
+        return self._request("GET", url).json()
+
     def get_builds(
-        self, project: str, definition_id: Optional[int] = None, top: int = 50
+        self,
+        project: str,
+        definition_id: Optional[int] = None,
+        top: int = 50,
+        branch_name: Optional[str] = None,
+        reason_filter: Optional[str] = None,
+        repository_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Get builds (pipeline runs)"""
         url = f"{self.base_url}/{quote(project)}/_apis/build/builds?api-version=6.0&$top={top}"
         if definition_id:
             url += f"&definitions={definition_id}"
+        if branch_name:
+            url += f"&branchName={quote(branch_name)}"
+        if reason_filter:
+            url += f"&reasonFilter={reason_filter}"
+        if repository_id:
+            url += f"&repositoryId={repository_id}"
         return self._request("GET", url).json()
 
     def get_build(self, project: str, build_id: int) -> Dict[str, Any]:

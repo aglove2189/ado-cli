@@ -101,6 +101,24 @@ def test_with_mock_server():
             assert new_wi["fields"]["System.Title"] == "New Bug"
             print("✓ Create work item works")
 
+            # Test create pull request thread (comment)
+            thread_data = {
+                "comments": [
+                    {
+                        "parentCommentId": 0,
+                        "content": "This looks good!",
+                        "commentType": 1,
+                    }
+                ],
+                "status": 1,
+            }
+            result = client.create_pull_request_thread(
+                "TestProject", "TestRepo", 1, thread_data
+            )
+            assert result["id"] is not None
+            assert result["comments"][0]["content"] == "This looks good!"
+            print("✓ Create PR thread works")
+
             # Test config
             print("Testing config...")
             cfg = AdoConfig()

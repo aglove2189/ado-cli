@@ -2,34 +2,38 @@ import os
 import sys
 import webbrowser
 from typing import Optional, Tuple
+from urllib.parse import quote, unquote
 
 import click
 
 from ado.client import AdoClient
-from ado.config import AdoConfig, CONFIG_FILE
-from ado.ui import (
-    console,
-    print_error,
-    print_success,
-    print_info,
-    print_warning,
-    print_pr_table,
-    print_pr_detail,
-    print_issue_table,
-    print_issue_detail,
-    print_repo_table,
-    print_pipeline_table,
-    print_diff,
-    prompt_input,
-    prompt_confirm,
-    spinner_context,
-)
+from ado.config import CONFIG_FILE, AdoConfig
 from ado.git_utils import (
-    get_current_branch,
-    get_remote_url,
     checkout_branch,
     fetch_ref,
+    get_current_branch,
+    get_remote_url,
+)
+from ado.git_utils import (
     get_diff as get_git_diff,
+)
+from ado.ui import (
+    console,
+    print_definition_table,
+    print_diff,
+    print_error,
+    print_info,
+    print_issue_detail,
+    print_issue_table,
+    print_pipeline_table,
+    print_pr_detail,
+    print_pr_table,
+    print_repo_table,
+    print_success,
+    print_warning,
+    prompt_confirm,
+    prompt_input,
+    spinner_context,
 )
 
 
@@ -58,12 +62,22 @@ def get_current_repo_info() -> Tuple[Optional[str], Optional[str]]:
         # Format: https://server/collection/project/_git/repo
         parts = remote_url.split("/_git/")
         if len(parts) == 2:
-            repo = parts[1].rstrip(".git")
-            project_part = parts[0].split("/")[-1]
+            repo = unquote(parts[1].replace(".git", ""))
+            project_part = unquote(parts[0].split("/")[-1])
             return project_part, repo
     except Exception:
         pass
     return None, None
+
+
+def ensure_project_repo(project: Optional[str], repo: Optional[str]) -> Tuple[str, str]:
+    """Validate that project and repo are not None, exit if they are"""
+    if not project or not repo:
+        print_error("Could not determine project/repo")
+        sys.exit(1)
+    # Type checker doesn't understand sys.exit prevents None reaching here
+    assert project is not None and repo is not None
+    return project, repo
 
 
 # ============================================================================
@@ -188,12 +202,11 @@ def repo_view(repo: Optional[str], project: Optional[str], web: bool):
     if not project:
         project = config.get("default_project")
 
-    if not project or not repo:
-        print_error("Could not determine project/repo")
-        sys.exit(1)
+    project, repo = ensure_project_repo(project, repo)
 
     if web:
-        url = f"{config.get('server_url')}/{config.get('collection')}/{project}/_git/{repo}"
+        collection = config.get("collection", "DefaultCollection")
+        url = f"{config.get('server_url')}/{quote(collection)}/{quote(project)}/_git/{quote(repo)}"
         webbrowser.open(url)
         return
 
@@ -209,6 +222,40 @@ def repo_view(repo: Optional[str], project: Optional[str], web: bool):
                 )
                 return
         print_error(f"Repository '{repo}' not found")
+    except Exception as e:
+        print_error(str(e))
+        sys.exit(1)
+
+
+# ============================================================================
+# Pipeline commands
+# ============================================================================
+@cli.group()
+def pipeline():
+    """Manage pipelines"""
+    pass
+
+
+@pipeline.command(name="list")
+@click.option("--project", help="Project name")
+def pipeline_list(project: Optional[str]):
+    """List pipeline definitions"""
+    client = get_client()
+    config = AdoConfig()
+
+    project = project or config.get("default_project")
+    if not project:
+        print_error("--project required or set a default project")
+        sys.exit(1)
+
+    try:
+        with spinner_context("Fetching pipelines...") as progress:
+            progress.add_task("fetch", total=None)
+            result = client.get_definitions(project)
+            progress.stop()
+
+        definitions = result.get("value", [])
+        print_definition_table(definitions)
     except Exception as e:
         print_error(str(e))
         sys.exit(1)
@@ -246,9 +293,7 @@ def pr_list(project: Optional[str], repo: Optional[str], state: str, limit: int)
     if not project:
         project = config.get("default_project")
 
-    if not project or not repo:
-        print_error("Could not determine project/repo")
-        sys.exit(1)
+    project, repo = ensure_project_repo(project, repo)
 
     try:
         with spinner_context("Fetching pull requests...") as progress:
@@ -281,12 +326,11 @@ def pr_view(pr_number: int, project: Optional[str], repo: Optional[str], web: bo
     if not project:
         project = config.get("default_project")
 
-    if not project or not repo:
-        print_error("Could not determine project/repo")
-        sys.exit(1)
+    project, repo = ensure_project_repo(project, repo)
 
     if web:
-        url = f"{config.get('server_url')}/{config.get('collection')}/{project}/_git/{repo}/pullrequest/{pr_number}"
+        collection = config.get("collection", "DefaultCollection")
+        url = f"{config.get('server_url')}/{quote(collection)}/{quote(project)}/_git/{quote(repo)}/pullrequest/{pr_number}"
         webbrowser.open(url)
         return
 
@@ -311,9 +355,7 @@ def checkout(pr_number: int, project: Optional[str], repo: Optional[str]):
         project = project or p
         repo = repo or r
 
-    if not project or not repo:
-        print_error("Could not determine project/repo")
-        sys.exit(1)
+    project, repo = ensure_project_repo(project, repo)
 
     try:
         pr_data = client.get_pull_request(project, repo, pr_number)
@@ -357,9 +399,7 @@ def diff(pr_number: int, project: Optional[str], repo: Optional[str]):
         project = project or p
         repo = repo or r
 
-    if not project or not repo:
-        print_error("Could not determine project/repo")
-        sys.exit(1)
+    project, repo = ensure_project_repo(project, repo)
 
     try:
         with spinner_context("Fetching PR details...") as progress:
@@ -423,9 +463,7 @@ def pr_create(
     if not project:
         project = config.get("default_project")
 
-    if not project or not repo:
-        print_error("Could not determine project/repo")
-        sys.exit(1)
+    project, repo = ensure_project_repo(project, repo)
 
     # Get current branch if head not specified
     head = head or get_current_branch()
@@ -459,8 +497,12 @@ def pr_create(
             result = client.create_pull_request(project, repo, pr_data)
             progress.stop()
 
-        print_success(f"Created pull request #{result['pullRequestId']}")
-        console.print(f"  [dim]{result['url']}[/dim]")
+        pr_number = result["pullRequestId"]
+        collection = config.get("collection", "DefaultCollection")
+        web_url = f"{config.get('server_url')}/{quote(collection)}/{quote(project)}/_git/{quote(repo)}/pullrequest/{pr_number}"
+
+        print_success(f"Created pull request #{pr_number}")
+        console.print(f"  [dim]{web_url}[/dim]")
     except Exception as e:
         print_error(str(e))
         sys.exit(1)
@@ -479,9 +521,7 @@ def close(pr_number: int, project: Optional[str], repo: Optional[str]):
         project = project or p
         repo = repo or r
 
-    if not project or not repo:
-        print_error("Could not determine project/repo")
-        sys.exit(1)
+    project, repo = ensure_project_repo(project, repo)
 
     try:
         client.update_pull_request(project, repo, pr_number, {"status": "abandoned"})
@@ -504,30 +544,87 @@ def checks(pr_number: int, project: Optional[str], repo: Optional[str]):
         project = project or p
         repo = repo or r
 
-    if not project or not repo:
-        print_error("Could not determine project/repo")
-        sys.exit(1)
+    project, repo = ensure_project_repo(project, repo)
 
     try:
         with spinner_context("Fetching PR and builds...") as progress:
             progress.add_task("fetch", total=None)
-            pr_data = client.get_pull_request(project, repo, pr_number)
-
-            # Get builds for the source branch
-            source_branch = pr_data["sourceRefName"]
-            builds = client.get_builds(project)
+            # Azure DevOps uses a special merge ref for PR builds
+            # Format: refs/pull/{pr_number}/merge
+            pr_merge_ref = f"refs/pull/{pr_number}/merge"
+            builds = client.get_builds(project, branch_name=pr_merge_ref, top=50)
             progress.stop()
 
-        # Filter builds for this PR's branch
-        pr_builds = [
-            b for b in builds.get("value", []) if b.get("sourceBranch") == source_branch
-        ]
+        # Get builds from the response
+        pr_builds = builds.get("value", [])
 
         if pr_builds:
             print_info(f"Builds for PR #{pr_number}")
             print_pipeline_table(pr_builds[:10])
         else:
             print_info(f"No builds found for PR #{pr_number}")
+
+    except Exception as e:
+        print_error(str(e))
+        sys.exit(1)
+
+
+@pr.command()
+@click.argument("pr_number", type=int)
+@click.option("-m", "--message", help="Comment text")
+@click.option("--project", help="Project name")
+@click.option("--repo", help="Repository name")
+def comment(
+    pr_number: int, message: Optional[str], project: Optional[str], repo: Optional[str]
+):
+    """Add a comment to a pull request"""
+    client = get_client()
+    config = AdoConfig()
+
+    # Auto-detect project/repo from git if not provided
+    if not project or not repo:
+        p, r = get_current_repo_info()
+        project = project or p
+        repo = repo or r
+
+    if not project:
+        project = config.get("default_project")
+
+    project, repo = ensure_project_repo(project, repo)
+
+    # Interactive mode if message not provided
+    if not message:
+        console.print(f"\n[bold cyan]Add Comment to PR #{pr_number}[/bold cyan]\n")
+        message = prompt_input("Comment")
+
+    if not message.strip():
+        print_error("Comment cannot be empty")
+        sys.exit(1)
+
+    try:
+        # Verify PR exists first
+        with spinner_context("Verifying pull request...") as progress:
+            progress.add_task("verify", total=None)
+            client.get_pull_request(project, repo, pr_number)
+            progress.stop()
+
+        # Create comment thread payload
+        thread_data = {
+            "comments": [{"parentCommentId": 0, "content": message, "commentType": 1}],
+            "status": 1,
+        }
+
+        # Post comment
+        with spinner_context("Adding comment...") as progress:
+            progress.add_task("comment", total=None)
+            result = client.create_pull_request_thread(
+                project, repo, pr_number, thread_data
+            )
+            progress.stop()
+
+        thread_id = result.get("id", "N/A")
+        print_success(f"Added comment to PR #{pr_number}")
+        console.print(f"  [dim]Thread ID: {thread_id}[/dim]")
 
     except Exception as e:
         print_error(str(e))
@@ -688,7 +785,10 @@ def view(issue_id: int, web: bool):
     config = AdoConfig()
 
     if web:
-        url = f"{config.get('server_url')}/{config.get('collection')}/_workitems/edit/{issue_id}"
+        collection = config.get("collection", "DefaultCollection")
+        url = (
+            f"{config.get('server_url')}/{quote(collection)}/_workitems/edit/{issue_id}"
+        )
         webbrowser.open(url)
         return
 

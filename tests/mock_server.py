@@ -149,7 +149,7 @@ class MockAzureDevOpsHandler(BaseHTTPRequestHandler):
             self._send_json(project, 201)
 
         # Create pull request
-        elif "/pullrequests" in path and "wiql" not in path:
+        elif "/pullrequests" in path and "wiql" not in path and "/threads" not in path:
             parts = path.split("/")
             project = parts[2]
             repo = parts[6]
@@ -176,6 +176,35 @@ class MockAzureDevOpsHandler(BaseHTTPRequestHandler):
             self.next_pr_id += 1
             self.pull_requests[key].append(pr)
             self._send_json(pr, 201)
+
+        # Create pull request thread (comment)
+        elif "/threads" in path:
+            # Mock thread response
+            thread = {
+                "id": 1,
+                "comments": data.get("comments", []),
+                "status": data.get("status", 1),
+                "publishedDate": "2024-01-16T12:00:00Z",
+            }
+
+            # Add mock comment IDs
+            raw_comments = thread.get("comments", [])
+            comments = (
+                raw_comments
+                if isinstance(raw_comments, list)
+                else [raw_comments]
+                if raw_comments
+                else []
+            )
+            for i, comment in enumerate(comments):
+                comment["id"] = i + 1
+                comment["author"] = {
+                    "displayName": "Test User",
+                    "uniqueName": "test@example.com",
+                }
+                comment["publishedDate"] = "2024-01-16T12:00:00Z"
+
+            self._send_json(thread, 201)
 
         # Query work items (WIQL)
         elif "/wiql" in path:

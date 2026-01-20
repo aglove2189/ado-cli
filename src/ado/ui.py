@@ -170,6 +170,29 @@ def print_repo_table(repos: List[Dict[str, Any]]):
     console.print(table)
 
 
+def print_definition_table(definitions: List[Dict[str, Any]]):
+    """Print pipeline definitions as a table"""
+    if not definitions:
+        print_info("No pipelines found")
+        return
+
+    table = Table(show_header=True, header_style="bold magenta")
+    table.add_column("ID", style="cyan", width=6)
+    table.add_column("Name", style="white")
+    table.add_column("Path", style="yellow")
+    table.add_column("Type", width=15)
+
+    for definition in definitions:
+        table.add_row(
+            str(definition.get("id", "N/A")),
+            definition.get("name", "N/A"),
+            definition.get("path", "\\"),
+            definition.get("type", "N/A"),
+        )
+
+    console.print(table)
+
+
 def print_pipeline_table(runs: List[Dict[str, Any]]):
     """Print pipeline runs as a table"""
     if not runs:
@@ -215,7 +238,8 @@ def print_diff(diff_text: str, language: str = "diff"):
 
 def prompt_input(question: str, default: Optional[str] = None) -> str:
     """Prompt for user input"""
-    return Prompt.ask(question, default=default)
+    result = Prompt.ask(question, default=default)
+    return result if result is not None else ""
 
 
 def prompt_confirm(question: str, default: bool = False) -> bool:
