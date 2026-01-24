@@ -158,13 +158,16 @@ def print_repo_table(repos: List[Dict[str, Any]]):
     table = Table(show_header=True, header_style="bold magenta")
     table.add_column("Name", style="cyan")
     table.add_column("Default Branch", style="yellow")
-    table.add_column("URL", style="dim")
+    table.add_column("Link", style="dim", width=6)
 
     for repo in repos:
+        remote_url = repo.get("remoteUrl", "")
+        # Use Rich's hyperlink syntax so the link works regardless of terminal width
+        link_display = f"[link={remote_url}]View[/link]" if remote_url else "N/A"
         table.add_row(
             repo["name"],
             repo.get("defaultBranch", "N/A").replace("refs/heads/", ""),
-            repo.get("remoteUrl", "N/A"),
+            link_display,
         )
 
     console.print(table)
