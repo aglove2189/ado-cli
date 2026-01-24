@@ -305,10 +305,37 @@ def pr_list(project: Optional[str], repo: Optional[str], state: str, limit: int)
         with spinner_context("Fetching pull requests...") as progress:
             progress.add_task("fetch", total=None)
             result = client.get_pull_requests(project, repo, state)
+            prs = result.get("value", [])[:limit]
+
+            # Fetch build status for each active PR
+            build_statuses = {}
+            for pr_data in prs:
+                if pr_data.get("status") == "active":
+                    pr_id = pr_data["pullRequestId"]
+                    pr_merge_ref = f"refs/pull/{pr_id}/merge"
+                    try:
+                        builds = client.get_builds(
+                            project, branch_name=pr_merge_ref, top=1
+                        )
+                        pr_builds = builds.get("value", [])
+                        if pr_builds:
+                            latest = pr_builds[0]
+                            result_status = latest.get("result", "")
+                            run_status = latest.get("status", "")
+                            if result_status == "succeeded":
+                                build_statuses[pr_id] = "succeeded"
+                            elif result_status == "failed":
+                                build_statuses[pr_id] = "failed"
+                            elif run_status == "inProgress":
+                                build_statuses[pr_id] = "inProgress"
+                            else:
+                                build_statuses[pr_id] = "pending"
+                    except Exception:
+                        # If we can't fetch builds, just skip
+                        pass
             progress.stop()
 
-        prs = result.get("value", [])[:limit]
-        print_pr_table(prs)
+        print_pr_table(prs, build_statuses)
     except Exception as e:
         print_error(str(e))
         sys.exit(1)

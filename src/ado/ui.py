@@ -29,8 +29,16 @@ def print_warning(message: str):
     console.print(f"[bold yellow]⚠[/bold yellow] {message}")
 
 
-def print_pr_table(prs: List[Dict[str, Any]]):
-    """Print pull requests as a table"""
+def print_pr_table(
+    prs: List[Dict[str, Any]], build_statuses: Optional[Dict[int, str]] = None
+):
+    """Print pull requests as a table
+
+    Args:
+        prs: List of pull request dictionaries
+        build_statuses: Optional dict mapping PR ID to build status string.
+                       Status should be one of: 'succeeded', 'failed', 'inProgress', 'pending', or None
+    """
     if not prs:
         print_info("No pull requests found")
         return
@@ -39,6 +47,7 @@ def print_pr_table(prs: List[Dict[str, Any]]):
     table.add_column("#", style="cyan", width=6)
     table.add_column("Title", style="white")
     table.add_column("Author", style="yellow", width=20)
+    table.add_column("Checks", width=10)
     table.add_column("Status", width=12)
 
     for pr in prs:
@@ -50,10 +59,26 @@ def print_pr_table(prs: List[Dict[str, Any]]):
         else:
             status_display = "[red]✗[/red] Abandoned"
 
+        # Build/checks status
+        build_status = (
+            build_statuses.get(pr["pullRequestId"]) if build_statuses else None
+        )
+        if build_status == "succeeded":
+            checks_display = "[green]✓ Pass[/green]"
+        elif build_status == "failed":
+            checks_display = "[red]✗ Fail[/red]"
+        elif build_status == "inProgress":
+            checks_display = "[yellow]● Running[/yellow]"
+        elif build_status == "pending":
+            checks_display = "[dim]○ Pending[/dim]"
+        else:
+            checks_display = "[dim]—[/dim]"
+
         table.add_row(
             str(pr["pullRequestId"]),
             pr["title"],
             pr["createdBy"]["displayName"],
+            checks_display,
             status_display,
         )
 
