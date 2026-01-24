@@ -122,6 +122,76 @@ class MockAzureDevOpsHandler(BaseHTTPRequestHandler):
             else:
                 self._send_error_json("Work item not found", 404)
 
+        # Get specific build log
+        elif "/_apis/build/builds/" in path and "/logs/" in path:
+            parts = path.split("/")
+            # Path: /project/_apis/build/builds/{id}/logs/{logId}
+            build_id = int(parts[5])
+            log_id = int(parts[7].split("?")[0])
+            # Return mock log content
+            log_content = f"""2024-01-16T12:00:00Z Starting step {log_id}...
+2024-01-16T12:00:01Z Running build for project
+2024-01-16T12:00:05Z Downloading dependencies...
+2024-01-16T12:00:10Z Compiling code...
+2024-01-16T12:00:15Z Running tests...
+2024-01-16T12:00:20Z Step {log_id} completed successfully
+"""
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(log_content.encode())
+
+        # Get build logs list
+        elif "/_apis/build/builds/" in path and "/logs" in path:
+            parts = path.split("/")
+            build_id = int(parts[5])
+            logs = {
+                "count": 3,
+                "value": [
+                    {
+                        "id": 1,
+                        "type": "Container",
+                        "lineCount": 10,
+                        "createdOn": "2024-01-16T12:00:00Z",
+                    },
+                    {
+                        "id": 2,
+                        "type": "Task",
+                        "lineCount": 25,
+                        "createdOn": "2024-01-16T12:00:05Z",
+                    },
+                    {
+                        "id": 3,
+                        "type": "Task",
+                        "lineCount": 15,
+                        "createdOn": "2024-01-16T12:00:10Z",
+                    },
+                ],
+            }
+            self._send_json(logs)
+
+        # Get specific build
+        elif "/_apis/build/builds/" in path:
+            parts = path.split("/")
+            build_id = int(parts[5].split("?")[0])
+            build = {
+                "id": build_id,
+                "buildNumber": f"20240116.{build_id}",
+                "status": "completed",
+                "result": "succeeded",
+                "definition": {"id": 1, "name": "TestPipeline"},
+                "sourceBranch": "refs/heads/main",
+                "sourceVersion": "abc123",
+                "startTime": "2024-01-16T12:00:00Z",
+                "finishTime": "2024-01-16T12:00:30Z",
+                "_links": {
+                    "web": {
+                        "href": f"http://localhost:8080/DefaultCollection/TestProject/_build/results?buildId={build_id}"
+                    }
+                },
+            }
+            self._send_json(build)
+
         else:
             self._send_error_json("Not found", 404)
 

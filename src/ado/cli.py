@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import webbrowser
 from typing import Optional, Tuple
 from urllib.parse import quote, unquote
@@ -747,6 +748,148 @@ def run_view(run_id: int, project: Optional[str], web: bool):
             if url:
                 webbrowser.open(url)
 
+    except Exception as e:
+        print_error(str(e))
+        sys.exit(1)
+
+
+@run.command(name="logs")
+@click.argument("run_id", type=int)
+@click.option("--project", help="Project name")
+@click.option("--step", "log_id", type=int, help="Show specific log step by ID")
+@click.option("--failed", is_flag=True, help="Show only failed step logs")
+def run_logs(run_id: int, project: Optional[str], log_id: Optional[int], failed: bool):
+    """View logs for a pipeline run"""
+    client = get_client()
+    config = AdoConfig()
+
+    project = project or config.get("default_project")
+    if not project:
+        print_error("--project required or set a default project")
+        sys.exit(1)
+
+    try:
+        # If specific log ID provided, show just that log
+        if log_id:
+            with spinner_context("Fetching log...") as progress:
+                progress.add_task("fetch", total=None)
+                log_content = client.get_build_log(project, run_id, log_id)
+                progress.stop()
+
+            console.print(f"\n[bold cyan]Log #{log_id} for Run #{run_id}[/bold cyan]\n")
+            console.print(log_content)
+            return
+
+        # Otherwise list all logs
+        with spinner_context("Fetching logs...") as progress:
+            progress.add_task("fetch", total=None)
+            logs_data = client.get_build_logs(project, run_id)
+            progress.stop()
+
+        logs = logs_data.get("value", [])
+
+        if not logs:
+            print_info(f"No logs found for run #{run_id}")
+            return
+
+        console.print(f"\n[bold cyan]Logs for Run #{run_id}[/bold cyan]\n")
+
+        from rich.table import Table
+
+        table = Table(show_header=True, header_style="bold")
+        table.add_column("ID", style="cyan", justify="right")
+        table.add_column("Type", style="yellow")
+        table.add_column("Lines", justify="right")
+        table.add_column("Created")
+
+        for log in logs:
+            table.add_row(
+                str(log.get("id", "")),
+                log.get("type", "N/A"),
+                str(log.get("lineCount", "")),
+                log.get("createdOn", "N/A")[:19] if log.get("createdOn") else "N/A",
+            )
+
+        console.print(table)
+        console.print("\n[dim]Use --step <ID> to view a specific log[/dim]")
+
+    except Exception as e:
+        print_error(str(e))
+        sys.exit(1)
+
+
+@run.command(name="watch")
+@click.argument("run_id", type=int)
+@click.option("--project", help="Project name")
+@click.option(
+    "--interval", default=5, type=int, help="Polling interval in seconds (default: 5)"
+)
+def run_watch(run_id: int, project: Optional[str], interval: int):
+    """Watch a pipeline run in real-time"""
+    client = get_client()
+    config = AdoConfig()
+
+    project = project or config.get("default_project")
+    if not project:
+        print_error("--project required or set a default project")
+        sys.exit(1)
+
+    try:
+        console.print(f"\n[bold cyan]Watching Run #{run_id}[/bold cyan]")
+        console.print(
+            f"[dim]Refreshing every {interval}s. Press Ctrl+C to stop.[/dim]\n"
+        )
+
+        last_status = None
+        while True:
+            run = client.get_build(project, run_id)
+            status = run.get("status", "unknown")
+            result = run.get("result", "")
+            pipeline_name = run.get("definition", {}).get("name", "N/A")
+            branch = run.get("sourceBranch", "N/A").replace("refs/heads/", "")
+
+            # Build status display
+            if result == "succeeded":
+                status_display = "[green]✓ Succeeded[/green]"
+            elif result == "failed":
+                status_display = "[red]✗ Failed[/red]"
+            elif result == "canceled":
+                status_display = "[yellow]⊘ Canceled[/yellow]"
+            elif status == "inProgress":
+                status_display = "[yellow]● In Progress[/yellow]"
+            elif status == "notStarted":
+                status_display = "[dim]○ Not Started[/dim]"
+            else:
+                status_display = f"[dim]{status}[/dim]"
+
+            # Clear previous line and print update
+            if last_status:
+                console.print("\033[F\033[K", end="")  # Move up and clear line
+
+            timestamp = time.strftime("%H:%M:%S")
+            console.print(
+                f"[dim]{timestamp}[/dim] [bold]{pipeline_name}[/bold] ({branch}) - {status_display}"
+            )
+            last_status = status
+
+            # Check if build is complete
+            if status == "completed":
+                console.print()
+                if result == "succeeded":
+                    print_success(f"Run #{run_id} completed successfully!")
+                elif result == "failed":
+                    print_error(f"Run #{run_id} failed")
+                    console.print(
+                        f"[dim]Use 'ado run logs {run_id}' to view logs[/dim]"
+                    )
+                else:
+                    print_info(f"Run #{run_id} finished with result: {result}")
+                break
+
+            time.sleep(interval)
+
+    except KeyboardInterrupt:
+        console.print("\n[dim]Stopped watching[/dim]")
     except Exception as e:
         print_error(str(e))
         sys.exit(1)

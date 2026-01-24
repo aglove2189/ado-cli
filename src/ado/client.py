@@ -132,6 +132,11 @@ class AdoClient:
         url = f"{self.base_url}/{quote(project)}/_apis/build/builds/{build_id}?api-version=6.0"
         return self._request("GET", url).json()
 
+    def get_build_logs(self, project: str, build_id: int) -> Dict[str, Any]:
+        """Get list of all logs for a build"""
+        url = f"{self.base_url}/{quote(project)}/_apis/build/builds/{build_id}/logs?api-version=6.0"
+        return self._request("GET", url).json()
+
     def get_build_log(self, project: str, build_id: int, log_id: int) -> str:
         """Get build log"""
         url = f"{self.base_url}/{quote(project)}/_apis/build/builds/{build_id}/logs/{log_id}?api-version=6.0"
