@@ -119,6 +119,26 @@ def test_with_mock_server():
             assert result["comments"][0]["content"] == "This looks good!"
             print("✓ Create PR thread works")
 
+            # Test get specific build (for run view/watch)
+            build = client.get_build("TestProject", 1)
+            assert build["id"] == 1
+            assert build["status"] == "completed"
+            assert build["result"] == "succeeded"
+            print("✓ Get build works")
+
+            # Test get build logs list (for run logs)
+            logs = client.get_build_logs("TestProject", 1)
+            assert logs["count"] == 3
+            assert len(logs["value"]) == 3
+            assert logs["value"][0]["id"] == 1
+            print("✓ Get build logs list works")
+
+            # Test get specific build log (for run logs --step)
+            log_content = client.get_build_log("TestProject", 1, 2)
+            assert "Starting step 2" in log_content
+            assert "completed successfully" in log_content
+            print("✓ Get specific build log works")
+
             # Test config
             print("Testing config...")
             cfg = AdoConfig()

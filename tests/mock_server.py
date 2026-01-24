@@ -125,9 +125,9 @@ class MockAzureDevOpsHandler(BaseHTTPRequestHandler):
         # Get specific build log
         elif "/_apis/build/builds/" in path and "/logs/" in path:
             parts = path.split("/")
-            # Path: /project/_apis/build/builds/{id}/logs/{logId}
-            build_id = int(parts[5])
-            log_id = int(parts[7].split("?")[0])
+            # Path: /DefaultCollection/project/_apis/build/builds/{id}/logs/{logId}
+            build_id = int(parts[6])
+            log_id = int(parts[8].split("?")[0])
             # Return mock log content
             log_content = f"""2024-01-16T12:00:00Z Starting step {log_id}...
 2024-01-16T12:00:01Z Running build for project
@@ -144,7 +144,7 @@ class MockAzureDevOpsHandler(BaseHTTPRequestHandler):
         # Get build logs list
         elif "/_apis/build/builds/" in path and "/logs" in path:
             parts = path.split("/")
-            build_id = int(parts[5])
+            build_id = int(parts[6])
             logs = {
                 "count": 3,
                 "value": [
@@ -173,7 +173,7 @@ class MockAzureDevOpsHandler(BaseHTTPRequestHandler):
         # Get specific build
         elif "/_apis/build/builds/" in path:
             parts = path.split("/")
-            build_id = int(parts[5].split("?")[0])
+            build_id = int(parts[6].split("?")[0])
             build = {
                 "id": build_id,
                 "buildNumber": f"20240116.{build_id}",
