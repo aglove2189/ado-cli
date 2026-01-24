@@ -126,6 +126,12 @@ def login():
             print_error(f"Failed to authenticate - {str(e)}")
             sys.exit(1)
 
+    # Ask for default project
+    default_project = prompt_input("Default project (optional)", default="")
+    if default_project.strip():
+        config.set("default_project", default_project.strip())
+        print_success(f"Set default project to '{default_project.strip()}'")
+
 
 @auth.command()
 def logout():
