@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ado-cli"
-version = "0.0.3"
+version = "0.0.4"
 description = "A GitHub CLI (gh) style interface for Azure DevOps Server (ado)"
 readme = "README.md"
 requires-python = ">=3.10"
